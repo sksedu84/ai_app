@@ -1,12 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, FastAPI
 
 api_router = APIRouter()
 
 
-def routes(router: APIRouter) -> None:
+def routes(app: FastAPI) -> None:
     from endpoint import admin
 
-    router.include_router(admin.router)
-
-
-routes(api_router)
+    app.include_router(admin.router)

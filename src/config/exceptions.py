@@ -39,7 +39,7 @@ def exception_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=exc.status_code, content=payload)
 
     @app.exception_handler(Exception)
-    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    async def unhandled_exception_handler(request: Request) -> JSONResponse:
         request_id = request.headers.get(constants.REQUEST_ID_HEADER)
 
         logger.exception(
