@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from config.logger import Logger
-from src.common import constants
+from common import constants
 
 logger = Logger.get_logger()
 

@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.common import constants
+from common import constants
 
 
 class AdminResponse(BaseModel):
