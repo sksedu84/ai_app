@@ -70,6 +70,9 @@ async def save_file(loc_dir: str, file: UploadFile) -> None:
 
 
 class AdminServiceImpl:
+    def __init__(self):
+        pass
+
     @staticmethod
     async def admin() -> AdminResponse:
         try:

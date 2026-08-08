@@ -6,6 +6,9 @@ from pathlib import Path
 from common import constants
 
 class Logger:
+    def __init__(self):
+        pass
+
     @staticmethod
     def get_logger() -> logging.Logger:
         logger = logging.getLogger(constants.APP_NAME)

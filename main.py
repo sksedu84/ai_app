@@ -15,11 +15,6 @@ def ai_app() -> FastAPI:
         lifespan=lifespan
     )
 
-    @fast_app.get("/")
-    @fast_app.get("/health")
-    async def health():
-        return {"status": "success"}
-
     exception_handlers(fast_app)
     routes(fast_app)
     middleware(fast_app)

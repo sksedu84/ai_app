@@ -11,6 +11,8 @@ def _get_port_from_env() -> Optional[int]:
     return None
 
 class DatabaseConfig:
+    def __init__(self):
+        pass
 
     HOST: Optional[str] = os.getenv("HOST")
     PORT: Optional[int] = _get_port_from_env()
