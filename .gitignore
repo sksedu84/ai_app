@@ -218,3 +218,6 @@ __marimo__/
 .streamlit/secrets.toml
 /.idea/*
 /ai_app.iml
+/log/AI Assistant.log.1
+/log/AI Assistant.log.2
+/log/AI Assistant.log.3
