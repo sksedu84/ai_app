@@ -9,9 +9,11 @@ api_router = APIRouter()
 def routes(app: FastAPI) -> None:
     from endpoint import admin
     from endpoint import health
+    from endpoint import rag_prompt
 
     app.include_router(admin.router)
     app.include_router(health.router)
+    app.include_router(rag_prompt.router)
 
     if not os.path.exists("static"):
         os.makedirs("static")

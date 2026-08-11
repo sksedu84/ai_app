@@ -10,7 +10,7 @@ logger = Logger.get_logger()
 
 
 class AdminEndpoint:
-    def __init__(self) -> None:
+    def __init__(self):
         self.router = APIRouter(tags=["Admin"])
 
         self.router.add_api_route(
