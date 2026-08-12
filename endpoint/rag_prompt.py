@@ -1,19 +1,27 @@
-import time
-from fastapi import APIRouter, HTTPException, Query
+from __future__ import annotations
 
-from common import constants
-from config.logger import Logger
+from typing import Annotated
+
+from fastapi import APIRouter, Query, Depends
+
 from model.prompt_response import PromptResponse
+from service.rag_service import RAGServiceImpl
 
-logger = Logger.get_logger()
+
+def get_rag_service() -> RAGServiceImpl:
+    """Dependency injection for RAGService."""
+    return RAGServiceImpl()
 
 
 class RAGPromptEndpoint:
-    def __init__(self):
-        self.router = APIRouter(tags=["RAG"])
+    """RAG prompt endpoint handler."""
+    
+    def __init__(self) -> None:
+        """Initialize RAG prompt endpoint with routes."""
+        self.router = APIRouter(tags=["RAG"], prefix="/rag")
 
         self.router.add_api_route(
-            "/rag",
+            "",
             self.rag_prompt,
             methods=["GET"],
             response_model=PromptResponse,
@@ -22,16 +30,19 @@ class RAGPromptEndpoint:
     @staticmethod
     async def rag_prompt(
         prompt: str = Query(default=None, min_length=1, max_length=10_000),
+        service: Annotated[RAGServiceImpl, Depends(get_rag_service)] = None
     ) -> PromptResponse:
-        try:
-            time.sleep(3)
-            return PromptResponse(
-                status=constants.OK,
-                response='Response from LLM based on prompt '+prompt,
-            )
-        except Exception as exc:
-            logger.exception("Unexpected error while processing prompt: %s", exc)
-            raise HTTPException(status_code=500, detail="Failed to process prompt request.") from exc
+        """
+        Process a RAG (Retrieval-Augmented Generation) prompt.
+        
+        Args:
+            prompt: User's prompt/query
+            service: Injected RAGService instance
+            
+        Returns:
+            PromptResponse with LLM response
+        """
+        return await service.process_rag_prompt(prompt)
 
 
 rag_prompt_endpoint = RAGPromptEndpoint()

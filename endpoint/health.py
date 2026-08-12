@@ -1,15 +1,28 @@
+from __future__ import annotations
+
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+
 from common import constants
 
 router = APIRouter(tags=["Health"])
 
+
 class HealthEndpoint:
-    def __init__(self):
+    """Health check endpoint handler."""
+    
+    def __init__(self) -> None:
+        """Initialize health endpoint."""
         pass
 
     @staticmethod
     async def get() -> JSONResponse:
+        """
+        Get application health status.
+        
+        Returns:
+            JSONResponse with health status
+        """
         return JSONResponse(
             status_code=200,
             content={
@@ -19,5 +32,6 @@ class HealthEndpoint:
         )
 
 
+# Add routes to router
 router.add_api_route("/", HealthEndpoint.get, methods=["GET"], response_class=JSONResponse, include_in_schema=False)
-router.add_api_route("/health", HealthEndpoint.get, methods=["GET"], response_class=JSONResponse, include_in_schema=False)
+router.add_api_route("/health", HealthEndpoint.get, methods=["GET"], response_class=JSONResponse)

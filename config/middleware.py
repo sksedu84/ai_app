@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -8,24 +10,42 @@ from starlette.responses import Response
 
 from common import constants
 from config.logger import Logger
+from config.settings import settings
 
 
 def middleware(app: FastAPI) -> None:
+    """
+    Configure application middleware including CORS and request logging.
+    
+    Args:
+        app: FastAPI application instance
+    """
     logger = Logger.get_logger()
 
+    # Configure CORS middleware
     _add_middleware = cast(Any, app.add_middleware)
     _add_middleware(
         cast(Any, CORSMiddleware),
-        allow_origins=["*"],
-        allow_methods=["*"],
-        allow_headers=["*"],
-        allow_credentials=False,
+        allow_origins=settings.cors_origins,
+        allow_methods=settings.cors_allow_methods,
+        allow_headers=settings.cors_allow_headers,
+        allow_credentials=settings.cors_allow_credentials,
     )
 
     @app.middleware("http")
     async def request_logging(
             request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
+        """
+        Middleware for logging HTTP requests and responses.
+        
+        Args:
+            request: Incoming HTTP request
+            call_next: Next middleware/handler in the chain
+            
+        Returns:
+            HTTP response with request ID header
+        """
         request_id = request.headers.get(constants.REQUEST_ID_HEADER) or uuid.uuid4().hex
         request.state.request_id = request_id
 
