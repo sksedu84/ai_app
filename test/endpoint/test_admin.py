@@ -4,7 +4,7 @@ from unittest.mock import patch, AsyncMock
 
 from common import constants
 from model.admin_response import AdminResponse
-from main import app
+from ai import app
 
 
 # noinspection PyClassHasNoInit

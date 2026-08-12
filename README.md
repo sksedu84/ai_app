@@ -66,7 +66,7 @@ AI Assistant is a FastAPI-based application designed for Retrieval-Augmented Gen
 Start the FastAPI server using Uvicorn:
 
 ```bash
-uvicorn ai:app --reload
+uvicorn ai:app --reload --port 8000 --host 127.0.0.1
 ```
 
 The application will be available at `http://127.0.0.1:8000`.
