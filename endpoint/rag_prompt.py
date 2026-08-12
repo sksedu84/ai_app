@@ -1,3 +1,4 @@
+import time
 from fastapi import APIRouter, HTTPException, Query
 
 from common import constants
@@ -23,6 +24,7 @@ class RAGPromptEndpoint:
         prompt: str = Query(default=None, min_length=1, max_length=10_000),
     ) -> PromptResponse:
         try:
+            time.sleep(3)
             return PromptResponse(
                 status=constants.OK,
                 response='Response from LLM based on prompt '+prompt,
