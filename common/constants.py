@@ -11,7 +11,6 @@ from typing import Final
 # Application Configuration
 # ============================================================================
 APP_NAME: Final[str] = "AI Assistant"
-MANIFEST_FILE_NAME: Final[str] = ".vdb_manifest.json"
 
 # ============================================================================
 # Response / Request Constants
@@ -64,7 +63,7 @@ ROTATING_FILE_MAX_SIZE: Final[int] = N_1024 * BACKUP_COUNT
 # LLM Model Names
 # ============================================================================
 # Local Models
-EMBEDDING_MODEL: Final[str] = "nomic-embed-text"
+EMBEDDING_MODEL: Final[str] = "nomic-embed-text:latest"
 GUARD_MODEL: Final[str] = "llama-guard3:1b"
 RAG_MODEL: Final[str] = "llama3.2:3b"
 
@@ -91,12 +90,3 @@ HASH: Final[str] = "hash"
 # ============================================================================
 SORT_BY_DATE: Final[str] = "date"
 ENCODING_UTF8: Final[str] = "utf-8"
-
-# ============================================================================
-# Manifest and Sync Result Keys
-# ============================================================================
-ADDED_CHUNKS: Final[str] = "added_chunks"
-ADDED_FILES: Final[str] = "added_files"
-UPDATED_FILES: Final[str] = "updated_files"
-DELETED_FILES: Final[str] = "deleted_files"
-SKIPPED_FILES: Final[str] = "skipped_files"

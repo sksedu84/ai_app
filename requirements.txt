@@ -16,3 +16,20 @@ starlette==0.46.0
 python-dotenv==1.2.2
 pytest==7.4.2
 pytest-asyncio==0.22.0
+
+# RAG / LLM / Embeddings
+langchain==0.1.20
+langchain-community==0.0.38
+langchain-core==0.1.52
+langchain-text-splitters==0.0.1
+ollama==0.6.2
+
+# PostgreSQL with pgvector
+psycopg2-binary==2.9.9
+pgvector==0.2.4
+sqlalchemy==2.0.23
+
+# Document Processing
+pypdf==3.17.1
+python-docx==0.8.11
+

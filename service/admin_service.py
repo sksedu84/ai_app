@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Optional
@@ -8,6 +9,7 @@ import aiofiles
 from fastapi import HTTPException, File, UploadFile
 
 from common import constants
+from common.vector_util import ingest_to_vectordb
 from config.logger import Logger
 from config.settings import settings
 from model.admin_response import AdminResponse
@@ -18,7 +20,7 @@ logger = Logger.get_logger()
 class AdminServiceImpl:
     """Service for admin operations."""
     
-    def __init__(self) -> None:
+    def __init__(self):
         """Initialize admin service."""
         pass
 
@@ -147,7 +149,7 @@ class AdminServiceImpl:
 
     async def admin(self) -> AdminResponse:
         """
-        Get admin page data with list of uploaded files.
+        Get admin page data with a list of uploaded files.
 
         Returns:
             AdminResponse with welcome message and file list
@@ -231,3 +233,41 @@ class AdminServiceImpl:
         except Exception as exc:
             logger.exception("Unexpected error during file upload: %s", exc)
             raise HTTPException(status_code=500, detail="Unexpected error occurred while uploading files.")
+
+    async def document_embeddings(self) -> AdminResponse:
+        """
+        Ingest documents and update embeddings.
+
+        Returns:
+            AdminResponse confirming document embeddings update
+
+        Raises:
+            HTTPException: If document ingestion or embedding update fails
+        """
+        try:
+            # Ingest documents to vector database
+            result = ingest_to_vectordb()
+            status = result.get("status", constants.OK)
+            if status not in {constants.OK, constants.ERROR}:
+                logger.warning("Unexpected ingestion status '%s'; defaulting to '%s'", status, constants.ERROR)
+                status = constants.ERROR
+            
+            admin_response = AdminResponse(
+                ai_response=result.get("message", "Documents embedded successfully."),
+                status=status,
+                added_chunks=result.get("added_chunks", 0),
+                added_files=result.get("added_files", 0),
+            )
+            admin_response.uploaded_files = self.get_file_name_from_dir(constants.SORT_BY_DATE, reverse=True)
+            
+            logger.info(
+                "Document embeddings updated successfully. Added: %d chunks from %d files",
+                result.get("added_chunks", 0),
+                result.get("added_files", 0)
+            )
+            return admin_response
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.exception("Unexpected error during document embeddings update: %s", exc)
+            raise HTTPException(status_code=500, detail="Unexpected error occurred while updating document embeddings.")

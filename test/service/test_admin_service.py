@@ -196,6 +196,34 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
             
             assert context.exception.status_code == 400
 
+    async def test_document_embeddings_success(self) -> None:
+        """Test document_embeddings returns a valid AdminResponse."""
+        with patch('service.admin_service.ingest_to_vectordb', return_value={
+            "status": constants.OK,
+            "message": "Documents ingested successfully",
+            "added_chunks": 3,
+            "added_files": 1,
+        }), patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
+            result = await self.admin_service.document_embeddings()
+
+        assert isinstance(result, AdminResponse)
+        assert result.status == constants.OK
+        assert result.added_chunks == 3
+        assert result.added_files == 1
+
+    async def test_document_embeddings_invalid_status_defaults_to_error(self) -> None:
+        """Test unexpected ingestion statuses are normalized for AdminResponse."""
+        with patch('service.admin_service.ingest_to_vectordb', return_value={
+            "status": "success",
+            "message": "Documents ingested successfully",
+            "added_chunks": 3,
+            "added_files": 1,
+        }), patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
+            result = await self.admin_service.document_embeddings()
+
+        assert isinstance(result, AdminResponse)
+        assert result.status == constants.ERROR
+
 
 if __name__ == "__main__":
     unittest.main()
