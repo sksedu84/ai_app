@@ -64,16 +64,12 @@ ROTATING_FILE_MAX_SIZE: Final[int] = N_1024 * BACKUP_COUNT
 # LLM Model Names
 # ============================================================================
 # Local Models
-RAG_MISTRAL: Final[str] = "mistral-small3.2:24b"
-GUARD_LLAMA: Final[str] = "llama-guard3:1b"
-RERANKER_QWEN: Final[str] = "sam860/qwen3-reranker:0.6b-Q8_0"
-CODE_DEEPSEEK: Final[str] = "deepseek-coder:6.7b"
-ROUTER_QWEN: Final[str] = "qwen3.5:0.8b"
-EMBEDDING_MODEL: Final[str] = "all-MiniLM-L6-v2"
+EMBEDDING_MODEL: Final[str] = "nomic-embed-text"
+GUARD_MODEL: Final[str] = "llama-guard3:1b"
+RAG_MODEL: Final[str] = "llama3.2:3b"
 
 # Cloud-based Models
-GEMINI_API: Final[str] = "gemini-3.1-flash-lite-preview"
-MAX_GEMINI_HISTORY_MESSAGES: Final[int] = 5
+
 
 # ============================================================================
 # RAG Configuration
