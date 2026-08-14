@@ -75,6 +75,21 @@ class DatabaseConfig:
         return f"postgresql+asyncpg://{cls.USER}:{cls.PASSWORD}@{cls.HOST}:{cls.PORT}/{cls.DATABASE}"
 
     @classmethod
+    def psycopg_db_con_as_string(cls) -> str:
+        """
+        Get psycopg (v3) database connection string.
+
+        Returns:
+            PostgreSQL psycopg connection string
+
+        Raises:
+            ValueError: If the required database configuration is missing
+        """
+        if cls.USER is None or cls.PASSWORD is None or cls.HOST is None or cls.PORT is None or cls.DATABASE is None:
+            raise ValueError("Missing required database configuration")
+        return f"postgresql+psycopg://{cls.USER}:{cls.PASSWORD}@{cls.HOST}:{cls.PORT}/{cls.DATABASE}"
+
+    @classmethod
     def psycopg2_db_con_as_string(cls) -> str:
         """
         Get psycopg2 database connection string.

@@ -93,6 +93,10 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+> Note: Vector store support now uses `langchain-postgres` with JSONB metadata.
+> If you are upgrading an existing deployment, back up your DB and migrate the
+> metadata column to JSONB before running ingestion jobs.
+
 ## Running the Application
 
 ### Development Mode

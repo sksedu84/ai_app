@@ -22,11 +22,13 @@ langchain==0.1.20
 langchain-community==0.0.38
 langchain-core==0.1.52
 langchain-text-splitters==0.0.1
+langchain-postgres==0.0.3
 ollama==0.6.2
 
 # PostgreSQL with pgvector
 psycopg2-binary==2.9.9
-pgvector==0.2.4
+psycopg[binary]==3.2.9
+pgvector==0.2.5
 sqlalchemy==2.0.23
 
 # Document Processing

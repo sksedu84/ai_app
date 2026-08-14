@@ -66,6 +66,10 @@ ROTATING_FILE_MAX_SIZE: Final[int] = N_1024 * BACKUP_COUNT
 EMBEDDING_MODEL: Final[str] = "nomic-embed-text:latest"
 GUARD_MODEL: Final[str] = "llama-guard3:1b"
 RAG_MODEL: Final[str] = "llama3.2:3b"
+EMBEDDING_API_BATCH_SIZE: Final[int] = 128
+EMBEDDING_FALLBACK_WORKERS: Final[int] = 6
+EMBEDDING_NUM_THREAD: Final[int | None] = None
+EMBEDDING_NUM_GPU: Final[int | None] = None
 
 # Cloud-based Models
 
@@ -73,8 +77,9 @@ RAG_MODEL: Final[str] = "llama3.2:3b"
 # ============================================================================
 # RAG Configuration
 # ============================================================================
-CHUNK_OVERLAP: Final[int] = N_100
-CHUNK_SIZE: Final[int] = CHUNK_OVERLAP * N_10
+CHUNK_OVERLAP: Final[int] = 64
+CHUNK_SIZE: Final[int] = N_1024 * 2
+VECTOR_DB_BATCH_SIZE: Final[int] = 400
 
 # ============================================================================
 # Metadata Keys

@@ -246,7 +246,7 @@ class AdminServiceImpl:
         """
         try:
             # Ingest documents to vector database
-            result = ingest_to_vectordb()
+            result = await asyncio.to_thread(ingest_to_vectordb)
             status = result.get("status", constants.OK)
             if status not in {constants.OK, constants.ERROR}:
                 logger.warning("Unexpected ingestion status '%s'; defaulting to '%s'", status, constants.ERROR)
