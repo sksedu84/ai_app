@@ -3,7 +3,9 @@ import asyncio
 from fastapi import HTTPException
 
 from common import constants
+from common.validate_util import validate_prompt
 from common.vector_util import get_vector_db_manager
+from config.exceptions import ApplicationError
 from config.logger import Logger
 from model.prompt_response import PromptResponse
 
@@ -29,14 +31,16 @@ class RAGServiceImpl:
             HTTPException: If processing fails
         """
         try:
+            validated_prompt = validate_prompt(prompt)
+
             # Get vector database manager
             vector_db = get_vector_db_manager()
 
             # Retrieve relevant documents from vector database
-            relevant_docs = vector_db.search(prompt, k=5)
+            relevant_docs = vector_db.search(validated_prompt, k=5)
 
             if not relevant_docs:
-                logger.warning(f"No relevant documents found for prompt: {prompt}")
+                logger.warning(f"No relevant documents found for prompt: {validated_prompt}")
                 context = "No relevant documents found in the knowledge base."
             else:
                 # Combine relevant documents into context
@@ -48,10 +52,17 @@ class RAGServiceImpl:
             # Simulate RAG pipeline processing with context
             await asyncio.sleep(3)
 
+            if validated_prompt is None:
+                validated_prompt = "Not Valid."
+
             return PromptResponse(
                 status=constants.OK,
-                response=f'Response from LLM based on prompt: {prompt}\n\nContext from documents:\n{context}',
+                response=validated_prompt,
             )
+        except ApplicationError:
+            raise
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception("Unexpected error while processing RAG prompt: %s", exc)
             raise HTTPException(status_code=500, detail="Failed to process prompt request.") from exc

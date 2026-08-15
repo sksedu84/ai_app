@@ -60,9 +60,9 @@ def exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
         """Handle HTTPException with proper logging and response formatting."""
-        request_id = request.headers.get(constants.REQUEST_ID_HEADER)
+        request_id = getattr(request.state, "request_id", None) or request.headers.get(constants.REQUEST_ID_HEADER)
 
-        logger.warning(
+        logger.error(
             "HTTP error request_id=%s method=%s path=%s status=%s detail=%s",
             request_id,
             request.method,
@@ -85,9 +85,9 @@ def exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApplicationError)
     async def application_error_handler(request: Request, exc: ApplicationError) -> JSONResponse:
         """Handle custom application errors."""
-        request_id = request.headers.get(constants.REQUEST_ID_HEADER)
+        request_id = getattr(request.state, "request_id", None) or request.headers.get(constants.REQUEST_ID_HEADER)
 
-        logger.warning(
+        logger.error(
             "Application error request_id=%s method=%s path=%s status=%s error=%s",
             request_id,
             request.method,
@@ -107,9 +107,9 @@ def exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         """Handle unhandled exceptions with a proper error response."""
-        request_id = request.headers.get(constants.REQUEST_ID_HEADER)
+        request_id = getattr(request.state, "request_id", None) or request.headers.get(constants.REQUEST_ID_HEADER)
 
-        logger.exception(
+        logger.error(
             "Unhandled error request_id=%s method=%s path=%s error_type=%s",
             request_id,
             request.method,

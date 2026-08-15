@@ -35,3 +35,6 @@ sqlalchemy==2.0.23
 pypdf==3.17.1
 python-docx==0.8.11
 
+markdown==3.4.4
+bleach==6.1.0
+

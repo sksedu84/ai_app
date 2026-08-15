@@ -4,6 +4,7 @@ Application-wide constants and configurations.
 This module contains all constants used throughout the application,
 organized by category for better maintainability.
 """
+from __future__ import annotations
 
 from typing import Final
 
@@ -98,3 +99,6 @@ HASH: Final[str] = "hash"
 SORT_BY_DATE: Final[str] = "date"
 ENCODING_UTF8: Final[str] = "utf-8"
 CONTENT_TYPE_JSON: Final[str] = "application/json"
+
+MAX_PROMPT_LENGTH: Final[int] = 10_000
+FORBIDDEN_WRAPPERS: Final[tuple[str, ...]] = ("```", '"""', "'''")
