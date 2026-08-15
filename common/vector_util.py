@@ -26,7 +26,7 @@ from sqlalchemy import create_engine, text
 
 from common import constants
 from config.logger import Logger
-from config.database import DatabaseConfig
+from common.database import DatabaseConfig
 
 logger = Logger.get_logger()
 
