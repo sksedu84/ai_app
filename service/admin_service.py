@@ -257,6 +257,7 @@ class AdminServiceImpl:
                 status=status,
                 added_chunks=result.get("added_chunks", 0),
                 added_files=result.get("added_files", 0),
+                renamed_files=result.get("renamed_files", 0),
             )
             admin_response.uploaded_files = self.get_file_name_from_dir(constants.SORT_BY_DATE, reverse=True)
             

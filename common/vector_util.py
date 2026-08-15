@@ -31,30 +31,23 @@ from common.database import DatabaseConfig
 logger = Logger.get_logger()
 
 
-class FastOllamaEmbeddings(Embeddings):
-    """Embedding wrapper that prefers Ollama's batch `/api/embed` endpoint."""
+class VectorDatabaseManager(Embeddings):
+    """Manages vector database operations for document embeddings using PostgreSQL with pgvector."""
 
-    def __init__(
-        self,
-        model: str,
-        base_url: str,
-        batch_size: int = constants.EMBEDDING_API_BATCH_SIZE,
-        max_workers: int = constants.EMBEDDING_FALLBACK_WORKERS,
-        num_thread: Optional[int] = constants.EMBEDDING_NUM_THREAD,
-        num_gpu: Optional[int] = constants.EMBEDDING_NUM_GPU,
-        headers: Optional[dict] = None,
-    ):
-        self.model = model
-        self.base_url = base_url.rstrip("/")
-        self.batch_size = max(1, batch_size)
-        self.max_workers = max(1, max_workers)
-        self.num_thread = num_thread
-        self.num_gpu = num_gpu
-        self.headers = {
-            "Content-Type": "application/json",
-            **(headers or {}),
-        }
+    # Collection/table name
+    COLLECTION_NAME: str = "documents"
+
+    def __init__(self):
+        """Initialize embedding and vector database management with pgvector."""
+        self.model = constants.EMBEDDING_MODEL
+        self.base_url = constants.OLLAMA_URL.rstrip("/")
+        self.batch_size = max(1, constants.EMBEDDING_API_BATCH_SIZE)
+        self.max_workers = max(1, constants.EMBEDDING_FALLBACK_WORKERS)
+        self.num_thread = constants.EMBEDDING_NUM_THREAD
+        self.num_gpu = constants.EMBEDDING_NUM_GPU
+        self.headers = {"Content-Type": constants.CONTENT_TYPE_JSON}
         self.session = requests.Session()
+        self._initialize_db()
 
     def _request_payload(self, *, key: str, value: Any) -> dict:
         payload = {
@@ -131,23 +124,6 @@ class FastOllamaEmbeddings(Embeddings):
         except Exception:
             return self._embed_single_legacy(instruction_pair)
 
-
-class VectorDatabaseManager:
-    """Manages vector database operations for document embeddings using PostgreSQL with pgvector."""
-
-    # Collection/table name
-    COLLECTION_NAME: str = "documents"
-    
-    def __init__(self):
-        """Initialize the vector database manager with PostgreSQL pgvector."""
-        self.embeddings = FastOllamaEmbeddings(
-            model=constants.EMBEDDING_MODEL,
-            base_url=constants.OLLAMA_URL,
-            batch_size=constants.EMBEDDING_API_BATCH_SIZE,
-            max_workers=constants.EMBEDDING_FALLBACK_WORKERS,
-        )
-        self._initialize_db()
-
     def _initialize_db(self) -> None:
         """Initialize the vector database connection with pgvector."""
         try:
@@ -160,7 +136,7 @@ class VectorDatabaseManager:
 
             # Initialize PGVector store
             self.db = PGVector(
-                embeddings=self.embeddings,
+                embeddings=self,
                 collection_name=self.COLLECTION_NAME,
                 connection=connection_string,
                 use_jsonb=True,
@@ -294,7 +270,12 @@ class VectorDatabaseManager:
         try:
             file_hash = self._get_file_hash(file_path)
             stored_hash = self._get_stored_file_hash(str(file_path))
-            return stored_hash != file_hash
+            if stored_hash is not None:
+                return stored_hash != file_hash
+
+            # If this exact content already exists under another source path,
+            # treat it as unchanged to avoid duplicate embeddings on rename.
+            return self._get_existing_source_for_hash(file_hash) is None
         except Exception as e:
             logger.warning(f"Could not check if document needs reindexing: {e}")
             return True
@@ -323,6 +304,62 @@ class VectorDatabaseManager:
             ).scalar_one_or_none()
             return str(result) if result else None
         return None
+
+    def _get_existing_source_for_hash(self, file_hash: str) -> Optional[str]:
+        """Find any existing source path that already has the same file hash."""
+        sql = text(
+            """
+            SELECT e.cmetadata->>:source_key AS source_file
+            FROM langchain_pg_embedding e
+            JOIN langchain_pg_collection c ON c.uuid = e.collection_id
+            WHERE c.name = :collection_name
+              AND e.cmetadata->>:file_hash_key = :file_hash
+            LIMIT 1
+            """
+        )
+        with self.engine.connect() as conn:
+            result = conn.execute(
+                sql,
+                {
+                    "collection_name": self.COLLECTION_NAME,
+                    "source_key": constants.SOURCE_FILE,
+                    "file_hash_key": constants.FILE_HASH,
+                    "file_hash": file_hash,
+                },
+            ).scalar_one_or_none()
+            return str(result) if result else None
+        return None
+
+    def _update_source_metadata(self, current_source: str, new_source: str, file_hash: str) -> int:
+        """Update stored source metadata for a renamed file without re-embedding."""
+        sql = text(
+            f"""
+            UPDATE langchain_pg_embedding AS e
+            SET cmetadata = jsonb_set(
+                jsonb_set(e.cmetadata, '{{{constants.SOURCE_FILE}}}', to_jsonb(CAST(:new_source AS text)), true),
+                '{{source}}',
+                to_jsonb(CAST(:new_source AS text)),
+                true
+            )
+            FROM langchain_pg_collection AS c
+            WHERE c.uuid = e.collection_id
+              AND c.name = :collection_name
+              AND e.cmetadata->>'{constants.SOURCE_FILE}' = :current_source
+              AND e.cmetadata->>'{constants.FILE_HASH}' = :file_hash
+            """
+        )
+        with self.engine.begin() as conn:
+            result = conn.execute(
+                sql,
+                {
+                    "collection_name": self.COLLECTION_NAME,
+                    "current_source": current_source,
+                    "new_source": new_source,
+                    "file_hash": file_hash,
+                },
+            )
+            return result.rowcount or 0
+        return 0
 
     def _get_source_chunk_ids(self, source_file: str) -> List[str]:
         """Collect vector row IDs for a source file so they can be replaced."""
@@ -381,8 +418,14 @@ class VectorDatabaseManager:
             
             # Keep unchanged files out of chunking/embedding work.
             reindex_start = perf_counter()
+            current_sources = {
+                str(Path(source))
+                for source in (document.metadata.get("source") for document in documents)
+                if source
+            }
             file_hash_cache: Dict[str, str] = {}
             source_needs_reindex: Dict[str, bool] = {}
+            renamed_files = 0
             filtered_documents: List[Document] = []
 
             for document in documents:
@@ -395,9 +438,41 @@ class VectorDatabaseManager:
                 if source_key not in source_needs_reindex:
                     current_hash = self._get_file_hash(Path(source_key))
                     file_hash_cache[source_key] = current_hash
-                    source_needs_reindex[source_key] = (
-                        self._get_stored_file_hash(source_key) != current_hash
-                    )
+
+                    stored_hash = self._get_stored_file_hash(source_key)
+                    if stored_hash is not None:
+                        source_needs_reindex[source_key] = stored_hash != current_hash
+                    else:
+                        existing_source = self._get_existing_source_for_hash(current_hash)
+                        is_renamed_file = (
+                            existing_source
+                            and existing_source != source_key
+                            and existing_source not in current_sources
+                        )
+                        if is_renamed_file:
+                            updated_rows = self._update_source_metadata(
+                                current_source=existing_source,
+                                new_source=source_key,
+                                file_hash=current_hash,
+                            )
+                            if updated_rows > 0:
+                                renamed_files += 1
+                                logger.info(
+                                    "Updated metadata for renamed file '%s' (previous source '%s', updated chunks=%d)",
+                                    source_key,
+                                    existing_source,
+                                    updated_rows,
+                                )
+                                source_needs_reindex[source_key] = False
+                            else:
+                                logger.warning(
+                                    "Rename detected from '%s' to '%s' but no stored metadata rows were updated; re-indexing instead",
+                                    existing_source,
+                                    source_key,
+                                )
+                                source_needs_reindex[source_key] = True
+                        else:
+                            source_needs_reindex[source_key] = True
 
                 if source_needs_reindex[source_key]:
                     filtered_documents.append(document)
@@ -405,13 +480,19 @@ class VectorDatabaseManager:
 
             if not filtered_documents:
                 skipped_files = len(source_needs_reindex)
-                logger.info("No changed documents detected; skipping re-ingestion")
+                message = "No changed documents found"
+                if renamed_files:
+                    message = "Renamed files detected; updated stored metadata without re-embedding"
+                    logger.info("No content changes detected; updated rename metadata and skipped re-ingestion")
+                else:
+                    logger.info("No changed documents detected; skipping re-ingestion")
                 return {
                     "status": constants.OK,
-                    "message": "No changed documents found",
+                    "message": message,
                     "added_chunks": 0,
                     "added_files": 0,
                     "skipped_files": skipped_files,
+                    "renamed_files": renamed_files,
                     "timings_ms": {
                         **stage_timings_ms,
                         "total": self._elapsed_ms(total_start),
@@ -489,6 +570,7 @@ class VectorDatabaseManager:
                 "added_chunks": len(chunks),
                 "added_files": len(set(c.metadata.get("source") for c in chunks if c.metadata.get("source"))),
                 "skipped_files": sum(1 for reindex in source_needs_reindex.values() if not reindex),
+                "renamed_files": renamed_files,
                 "chunks": [f"chunk_{i}" for i in range(len(chunks))],
                 "timings_ms": stage_timings_ms,
             }

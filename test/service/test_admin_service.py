@@ -203,6 +203,7 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
             "message": "Documents ingested successfully",
             "added_chunks": 3,
             "added_files": 1,
+            "renamed_files": 2,
         }), patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
             result = await self.admin_service.document_embeddings()
 
@@ -210,6 +211,7 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
         assert result.status == constants.OK
         assert result.added_chunks == 3
         assert result.added_files == 1
+        assert result.renamed_files == 2
 
     async def test_document_embeddings_invalid_status_defaults_to_error(self) -> None:
         """Test unexpected ingestion statuses are normalized for AdminResponse."""

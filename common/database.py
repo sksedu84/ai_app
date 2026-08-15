@@ -1,18 +1,15 @@
 """
 Database configuration module.
 
-Note: This module is deprecated. Use config/settings.py for all configuration instead.
+Note: This module is deprecated. Use config/settings.py for all configurations instead.
 """
 
 from __future__ import annotations
 
 import os
 from typing import Optional
-from dotenv import load_dotenv
 
 from config.settings import settings
-
-load_dotenv()
 
 
 def _get_port_from_env() -> Optional[int]:
@@ -34,7 +31,7 @@ class DatabaseConfig:
 
     """
 
-    def __init__(self) -> None:
+    def __init__(self):
         """Initialize database config."""
         pass
 

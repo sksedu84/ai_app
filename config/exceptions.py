@@ -15,7 +15,7 @@ logger = Logger.get_logger()
 class ApplicationError(Exception):
     """Base application error class."""
     
-    def __init__(self, message: str, status_code: int = 500) -> None:
+    def __init__(self, message: str, status_code: int = 500):
         """
         Initialize application error.
         
@@ -31,21 +31,21 @@ class ApplicationError(Exception):
 class ValidationError(ApplicationError):
     """Raised when input validation fails."""
     
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str):
         super().__init__(message, status_code=400)
 
 
 class FileError(ApplicationError):
     """Raised when file-related errors."""
     
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str):
         super().__init__(message, status_code=400)
 
 
 class ProcessingError(ApplicationError):
     """Raised when processing fails."""
     
-    def __init__(self, message: str) -> None:
+    def __init__(self, message: str):
         super().__init__(message, status_code=500)
 
 

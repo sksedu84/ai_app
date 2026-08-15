@@ -13,7 +13,7 @@ class Logger:
 
     _logger_instance: logging.Logger | None = None
 
-    def __init__(self) -> None:
+    def __init__(self):
         """Logger instances should be obtained via get_logger()."""
         pass
 

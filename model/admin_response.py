@@ -12,6 +12,7 @@ ADMIN_RESPONSE_EXAMPLE = {
     "uploadedFiles": ["documents/example.txt"],
     "addedFiles": 0,
     "addedChunks": 0,
+    "renamedFiles": 0,
 }
 
 
@@ -49,4 +50,10 @@ class AdminResponse(BaseModel):
         serialization_alias="addedChunks",
         ge=0,
         description="Number of chunks added"
+    )
+    renamed_files: int = Field(
+        default=0,
+        serialization_alias="renamedFiles",
+        ge=0,
+        description="Number of renamed files detected and updated without re-embedding"
     )

@@ -14,10 +14,11 @@ from ai import app
 
 class TestAdminEndpoint:
     """Test suite for Admin endpoints."""
-    
+
+
     @pytest.fixture(autouse=True)
     def setup(self) -> None:
-        """Setup test client."""
+        """Set up a test client."""
         self.client = TestClient(app)
 
     def test_admin_get_success(self) -> None:
@@ -32,7 +33,7 @@ class TestAdminEndpoint:
         assert "Welcome" in data["aiResponse"]
 
     def test_admin_response_format(self) -> None:
-        """Test admin response has correct format."""
+        """Test admin response has the correct format."""
         # Act
         response = self.client.get("/admin")
 
@@ -42,15 +43,17 @@ class TestAdminEndpoint:
         assert "aiResponse" in data
         assert "status" in data
         assert "uploadedFiles" in data
+        assert "renamedFiles" in data
         assert isinstance(data["uploadedFiles"], list)
+        assert isinstance(data["renamedFiles"], int)
 
     def test_upload_files_empty_request(self) -> None:
-        """Test upload with empty files returns error."""
+        """Test upload with empty files returns an error."""
         # Act
         response = self.client.post("/admin/upload-files", files=[])
 
         # Assert
-        # Empty upload should be rejected by FastAPI
+        # FastAPI should reject Empty upload
         assert response.status_code >= 400
 
     def test_admin_response_model_valid(self) -> None:
@@ -60,13 +63,15 @@ class TestAdminEndpoint:
             ai_response="Test",
             status=constants.OK,
             uploaded_files=["file1.txt"],
-            added_files=1
+            added_files=1,
+            renamed_files=2,
         )
 
         # Assert
         assert response.ai_response == "Test"
         assert response.status == constants.OK
         assert len(response.uploaded_files) == 1
+        assert response.renamed_files == 2
 
     def test_admin_response_model_invalid_status(self) -> None:
         """Test AdminResponse model rejects invalid status."""

@@ -61,8 +61,8 @@ class AdminEndpoint:
 
     @staticmethod
     async def upload_files(
+        service: Annotated[AdminServiceImpl, Depends(get_admin_service)],
         files: list[UploadFile] = File(...),
-        service: Annotated[AdminServiceImpl, Depends(get_admin_service)] = None
     ) -> AdminResponse:
         """
         Upload files to the application.
@@ -78,7 +78,7 @@ class AdminEndpoint:
 
     @staticmethod
     async def document_embeddings(
-            service: Annotated[AdminServiceImpl, Depends(get_admin_service)] = None
+            service: Annotated[AdminServiceImpl, Depends(get_admin_service)]
     ) -> AdminResponse:
         """
         Ingest documents and update embeddings.
