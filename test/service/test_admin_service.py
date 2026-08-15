@@ -204,7 +204,8 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
             "added_chunks": 3,
             "added_files": 1,
             "renamed_files": 2,
-        }), patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
+        }), patch('service.admin_service.move_file_to_archive') as move_to_archive_mock, \
+             patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
             result = await self.admin_service.document_embeddings()
 
         assert isinstance(result, AdminResponse)
@@ -212,6 +213,7 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
         assert result.added_chunks == 3
         assert result.added_files == 1
         assert result.renamed_files == 2
+        move_to_archive_mock.assert_called_once()
 
     async def test_document_embeddings_invalid_status_defaults_to_error(self) -> None:
         """Test unexpected ingestion statuses are normalized for AdminResponse."""
@@ -220,11 +222,13 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
             "message": "Documents ingested successfully",
             "added_chunks": 3,
             "added_files": 1,
-        }), patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
+        }), patch('service.admin_service.move_file_to_archive') as move_to_archive_mock, \
+             patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
             result = await self.admin_service.document_embeddings()
 
         assert isinstance(result, AdminResponse)
         assert result.status == constants.ERROR
+        move_to_archive_mock.assert_not_called()
 
 
 if __name__ == "__main__":
