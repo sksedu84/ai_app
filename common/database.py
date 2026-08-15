@@ -77,7 +77,7 @@ class DatabaseConfig:
     @classmethod
     def psycopg_db_con_as_string(cls) -> str:
         """
-        Get psycopg (v3) database connection string.
+        Get psycopg database connection string.
 
         Returns:
             PostgreSQL psycopg connection string
