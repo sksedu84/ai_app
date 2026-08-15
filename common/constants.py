@@ -63,6 +63,7 @@ ROTATING_FILE_MAX_SIZE: Final[int] = N_1024 * BACKUP_COUNT
 # LLM Model Names
 # ============================================================================
 # Local Models
+OLLAMA_URL: Final[str] = "http://localhost:11434"
 EMBEDDING_MODEL: Final[str] = "nomic-embed-text:latest"
 GUARD_MODEL: Final[str] = "llama-guard3:1b"
 RAG_MODEL: Final[str] = "llama3.2:3b"

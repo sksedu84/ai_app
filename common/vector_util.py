@@ -142,7 +142,7 @@ class VectorDatabaseManager:
         """Initialize the vector database manager with PostgreSQL pgvector."""
         self.embeddings = FastOllamaEmbeddings(
             model=constants.EMBEDDING_MODEL,
-            base_url="http://localhost:11434",  # Default Ollama URL
+            base_url=constants.OLLAMA_URL,
             batch_size=constants.EMBEDDING_API_BATCH_SIZE,
             max_workers=constants.EMBEDDING_FALLBACK_WORKERS,
         )
