@@ -19,7 +19,7 @@ logger = Logger.get_logger()
 
 
 def move_file_to_archive() -> int:
-    """Move files from documents directory to archive directory."""
+    """Move files from the documents directory to the archive directory."""
     source_dir = Path(constants.DOCUMENT_DATA_DIR)
     archive_dir = Path(constants.ARCHIVE_DIR)
 
