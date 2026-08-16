@@ -8,6 +8,7 @@ from common.vector_util import get_vector_db_manager
 from config.exceptions import ApplicationError
 from config.logger import Logger
 from model.prompt_response import PromptResponse
+from common.ai_app_util import AiAppUtil
 
 logger = Logger.get_logger()
 
@@ -54,6 +55,8 @@ class RAGServiceImpl:
 
             if validated_prompt is None:
                 validated_prompt = "Not Valid."
+
+            validated_prompt = AiAppUtil.text_to_safe_html(validated_prompt)
 
             return PromptResponse(
                 status=constants.OK,
