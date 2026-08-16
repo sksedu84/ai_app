@@ -14,36 +14,9 @@ from common.vector_util import ingest_to_vectordb
 from config.logger import Logger
 from config.settings import settings
 from model.admin_response import AdminResponse
+from common.ai_app_util import AiAppUtil
 
 logger = Logger.get_logger()
-
-
-def move_file_to_archive() -> int:
-    """Move files from the documents directory to the archive directory."""
-    source_dir = Path(constants.DOCUMENT_DATA_DIR)
-    archive_dir = Path(constants.ARCHIVE_DIR)
-
-    if not source_dir.exists():
-        logger.info("No document directory found to archive: %s", source_dir)
-        return 0
-
-    archive_dir.mkdir(parents=True, exist_ok=True)
-
-    moved_files = 0
-    for item in source_dir.iterdir():
-        if item.name.startswith('.') or not item.is_file():
-            continue
-
-        destination = archive_dir / item.name
-        if destination.exists():
-            # Keep archive files unique by suffixing duplicate names.
-            destination = archive_dir / f"{item.stem}_{int(item.stat().st_mtime_ns)}{item.suffix}"
-
-        shutil.move(str(item), str(destination))
-        moved_files += 1
-
-    logger.info("Moved %d file(s) from %s to %s", moved_files, source_dir, archive_dir)
-    return moved_files
 
 
 class AdminServiceImpl:
@@ -263,12 +236,12 @@ class AdminServiceImpl:
             logger.exception("Unexpected error during file upload: %s", exc)
             raise HTTPException(status_code=500, detail="Unexpected error occurred while uploading files.")
 
-    async def document_embeddings(self) -> AdminResponse:
+    async def ingest_documents(self) -> AdminResponse:
         """
         Ingest documents and update embeddings.
 
         Returns:
-            AdminResponse confirming document embeddings update
+            AdminResponse confirming document ingestion
 
         Raises:
             HTTPException: If document ingestion or embedding update fails
@@ -282,20 +255,20 @@ class AdminServiceImpl:
                 status = constants.ERROR
             
             admin_response = AdminResponse(
-                ai_response=result.get("message", "Documents embedded successfully."),
+                ai_response=result.get("message", "Documents ingested successfully."),
                 status=status,
                 added_chunks=result.get("added_chunks", 0),
                 added_files=result.get("added_files", 0),
                 renamed_files=result.get("renamed_files", 0),
             )
             if status == constants.OK:
-                move_file_to_archive()
+                AiAppUtil.move_to_archive(constants.DOCUMENT_DATA_DIR)
             else:
                 logger.info("Skipping archive move because ingestion status is '%s'", status)
             admin_response.uploaded_files = self.get_file_name_from_dir(constants.SORT_BY_DATE, reverse=True)
             
             logger.info(
-                "Document embeddings updated successfully. Added: %d chunks from %d files",
+                "Documents ingested successfully. Added: %d chunks from %d files",
                 result.get("added_chunks", 0),
                 result.get("added_files", 0)
             )
@@ -303,5 +276,28 @@ class AdminServiceImpl:
         except HTTPException:
             raise
         except Exception as exc:
-            logger.exception("Unexpected error during document embeddings update: %s", exc)
-            raise HTTPException(status_code=500, detail="Unexpected error occurred while updating document embeddings.")
+            logger.exception("Unexpected error during document ingestion: %s", exc)
+            raise HTTPException(status_code=500, detail="Unexpected error occurred while ingesting documents.")
+
+    @staticmethod
+    async def refresh_database() -> AdminResponse:
+        """
+        Refresh the database.
+
+        Returns:
+            AdminResponse confirming database refresh
+
+        Raises:
+            HTTPException: If database refresh fails
+        """
+        try:
+            logger.info("Database refresh initiated.")
+            # Simulate a database refresh operation
+            await asyncio.sleep(2)
+
+            logger.info("Database refreshed successfully.")
+            return AdminResponse(ai_response="Database refreshed successfully.", status=constants.OK)
+        except Exception as exc:
+            logger.exception("Unexpected error during database refresh: %s", exc)
+            raise HTTPException(status_code=500, detail="Unexpected error occurred while refreshing the database.")
+

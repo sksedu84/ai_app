@@ -38,8 +38,15 @@ class AdminEndpoint:
         )
 
         self.router.add_api_route(
-            "/document/embeddings",
-            self.document_embeddings,
+            "/ingest/documents",
+            self.ingest_documents,
+            methods=["GET"],
+            response_model=AdminResponse,
+        )
+
+        self.router.add_api_route(
+            "/refresh/database",
+            self.refresh_database,
             methods=["GET"],
             response_model=AdminResponse,
         )
@@ -77,7 +84,7 @@ class AdminEndpoint:
         return await service.upload_files(files)
 
     @staticmethod
-    async def document_embeddings(
+    async def ingest_documents(
             service: Annotated[AdminServiceImpl, Depends(get_admin_service)]
     ) -> AdminResponse:
         """
@@ -87,9 +94,24 @@ class AdminEndpoint:
             service: Injected AdminService instance
 
         Returns:
-            AdminResponse confirming document embeddings update
+            AdminResponse confirming document ingestion
         """
-        return await service.document_embeddings()
+        return await service.ingest_documents()
+
+    @staticmethod
+    async def refresh_database(
+            service: Annotated[AdminServiceImpl, Depends(get_admin_service)]
+    ) -> AdminResponse:
+        """
+        Refresh the database.
+
+        Args:
+            service: Injected AdminService instance
+
+        Returns:
+            AdminResponse confirming database refresh
+        """
+        return await service.refresh_database()
 
 
 admin_endpoint = AdminEndpoint()

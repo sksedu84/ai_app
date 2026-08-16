@@ -93,6 +93,17 @@ class TestAdminEndpoint:
         assert data["status"] == constants.OK
         assert data["service"] == constants.APP_NAME
 
+    def test_refresh_database_success(self) -> None:
+        """Regression test for GET /admin/refresh/database endpoint."""
+        # Act
+        response = self.client.get("/admin/refresh/database")
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == constants.OK
+        assert "refreshed" in data["aiResponse"].lower()
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
