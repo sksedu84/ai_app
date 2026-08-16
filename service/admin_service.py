@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import shutil
 from pathlib import Path
 from typing import Optional
 
 import aiofiles
 from fastapi import HTTPException, File, UploadFile
+from sqlalchemy import create_engine, text
 
 from common import constants
+from common.database import DatabaseConfig
 from common.vector_util import ingest_to_vectordb
 from config.logger import Logger
 from config.settings import settings
@@ -292,11 +295,37 @@ class AdminServiceImpl:
         """
         try:
             logger.info("Database refresh initiated.")
-            # Simulate a database refresh operation
-            await asyncio.sleep(2)
+
+            schema_path = Path(constants.SQL_SCHEMA_FILE)
+            if not schema_path.exists():
+                raise HTTPException(status_code=404, detail=f"Schema file not found: {schema_path}")
+
+            schema_sql = schema_path.read_text(encoding=constants.ENCODING_UTF8)
+            schema_sql = re.sub(r"/\*.*?\*/", "", schema_sql, flags=re.DOTALL)
+            schema_sql = re.sub(r"--.*$", "", schema_sql, flags=re.MULTILINE)
+            statements = [stmt.strip() for stmt in schema_sql.split(";") if stmt.strip()]
+
+            if not statements:
+                logger.warning("Schema file '%s' has no executable SQL statements.", schema_path)
+                return AdminResponse(ai_response="Schema file is empty; nothing to execute.", status=constants.OK)
+
+            db_url = DatabaseConfig.psycopg_db_con_as_string()
+
+            def _execute_schema() -> None:
+                engine = create_engine(db_url)
+                try:
+                    with engine.begin() as conn:
+                        for statement in statements:
+                            conn.execute(text(statement))
+                finally:
+                    engine.dispose()
+
+            await asyncio.to_thread(_execute_schema)
 
             logger.info("Database refreshed successfully.")
             return AdminResponse(ai_response="Database refreshed successfully.", status=constants.OK)
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception("Unexpected error during database refresh: %s", exc)
             raise HTTPException(status_code=500, detail="Unexpected error occurred while refreshing the database.")

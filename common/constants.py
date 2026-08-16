@@ -50,6 +50,7 @@ SUPPORTED_UPLOAD_EXTENSIONS: Final[frozenset[str]] = frozenset(
 DATA_DIR: Final[str] = "data"
 DOCUMENT_DATA_DIR: Final[str] = f"{DATA_DIR}/documents"
 SQL_DATA_DIR: Final[str] = f"{DATA_DIR}/sql"
+SQL_SCHEMA_FILE: Final[str] = f"{SQL_DATA_DIR}/ai_app_schema.sql"
 ARCHIVE_DIR: Final[str] = f"{DATA_DIR}/archive"
 
 # ============================================================================
