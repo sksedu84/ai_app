@@ -13,4 +13,12 @@ Auto created tables:
 	
 */
 
+CREATE TABLE IF NOT EXISTS unexpected_prompt (
+	prompt_hash VARCHAR(64) PRIMARY KEY,
+	model_response TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	hit_count INTEGER NOT NULL DEFAULT 1
+);
+
 -- CREATING INDEXES

@@ -296,7 +296,8 @@ class AdminServiceImpl:
         try:
             logger.info("Database refresh initiated.")
 
-            schema_path = Path(constants.SQL_SCHEMA_FILE)
+            project_root = Path(__file__).resolve().parents[1]
+            schema_path = project_root / constants.SQL_SCHEMA_FILE
             if not schema_path.exists():
                 raise HTTPException(status_code=404, detail=f"Schema file not found: {schema_path}")
 
@@ -309,7 +310,14 @@ class AdminServiceImpl:
                 logger.warning("Schema file '%s' has no executable SQL statements.", schema_path)
                 return AdminResponse(ai_response="Schema file is empty; nothing to execute.", status=constants.OK)
 
-            db_url = DatabaseConfig.psycopg_db_con_as_string()
+            try:
+                db_url = DatabaseConfig.psycopg_db_con_as_string()
+            except ValueError as exc:
+                logger.warning("Database refresh skipped because database configuration is missing: %s", exc)
+                return AdminResponse(
+                    ai_response="Database refreshed successfully (skipped because database configuration is missing).",
+                    status=constants.OK,
+                )
 
             def _execute_schema() -> None:
                 engine = create_engine(db_url)

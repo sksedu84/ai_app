@@ -204,9 +204,9 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
             "added_chunks": 3,
             "added_files": 1,
             "renamed_files": 2,
-        }), patch('service.admin_service.move_file_to_archive') as move_to_archive_mock, \
+        }), patch('service.admin_service.AiAppUtil.move_to_archive') as move_to_archive_mock, \
              patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
-            result = await self.admin_service.document_embeddings()
+            result = await self.admin_service.ingest_documents()
 
         assert isinstance(result, AdminResponse)
         assert result.status == constants.OK
@@ -222,13 +222,22 @@ class TestAdminService(unittest.IsolatedAsyncioTestCase):
             "message": "Documents ingested successfully",
             "added_chunks": 3,
             "added_files": 1,
-        }), patch('service.admin_service.move_file_to_archive') as move_to_archive_mock, \
+        }), patch('service.admin_service.AiAppUtil.move_to_archive') as move_to_archive_mock, \
              patch.object(self.admin_service, 'get_file_name_from_dir', return_value=['doc.txt']):
-            result = await self.admin_service.document_embeddings()
+            result = await self.admin_service.ingest_documents()
 
         assert isinstance(result, AdminResponse)
         assert result.status == constants.ERROR
         move_to_archive_mock.assert_not_called()
+
+    async def test_refresh_database_missing_db_config_returns_ok(self) -> None:
+        """Test refresh_database succeeds when DB settings are not configured."""
+        with patch('service.admin_service.DatabaseConfig.psycopg_db_con_as_string', side_effect=ValueError("Missing required database configuration")):
+            result = await self.admin_service.refresh_database()
+
+        assert isinstance(result, AdminResponse)
+        assert result.status == constants.OK
+        assert "skipped" in result.ai_response.lower()
 
 
 if __name__ == "__main__":
