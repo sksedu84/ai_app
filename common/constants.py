@@ -84,6 +84,14 @@ EMBEDDING_NUM_GPU: Final[int | None] = None
 CHUNK_OVERLAP: Final[int] = 64
 CHUNK_SIZE: Final[int] = N_1024 * 2
 VECTOR_DB_BATCH_SIZE: Final[int] = 400
+VECTOR_SEARCH_FETCH_K: Final[int] = 40
+VECTOR_SEARCH_MAX_K: Final[int] = 20
+VECTOR_SEARCH_MMR_LAMBDA: Final[float] = 0.5
+VECTOR_SEARCH_MIN_RELEVANCE: Final[float] = 0.2
+VECTOR_WEIGHT_EMBEDDING: Final[float] = 1.0
+VECTOR_WEIGHT_KEYWORD: Final[float] = 0.0
+VECTOR_WEIGHT_METADATA: Final[float] = 0.0
+VECTOR_WEIGHT_RERANKER: Final[float] = 0.0
 
 # ============================================================================
 # Metadata Keys

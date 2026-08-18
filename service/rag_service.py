@@ -38,29 +38,21 @@ class RAGServiceImpl:
             vector_db = get_vector_db_manager()
 
             # Retrieve relevant documents from vector database
-            relevant_docs = vector_db.search(validated_prompt, k=5)
+            scored_results = vector_db.search_with_scores(validated_prompt, k=10)
+
+            relevant_docs = [doc for doc, _ in scored_results]
 
             if not relevant_docs:
                 logger.warning(f"No relevant documents found for prompt: {validated_prompt}")
-                context = "No relevant documents found in the knowledge base."
-            else:
-                # Combine relevant documents into context
-                context = "\n---\n".join([
-                    f"Source: {doc.metadata.get('source', 'Unknown')}\n{doc.page_content}"
-                    for doc in relevant_docs
-                ])
+
 
             # Simulate RAG pipeline processing with context
-            await asyncio.sleep(3)
-
-            if validated_prompt is None:
-                validated_prompt = "Not Valid."
-
-            validated_prompt = AiAppUtil.text_to_safe_html(validated_prompt)
+            #await asyncio.sleep(3)
+            #response = AiAppUtil.text_to_safe_html(response)
 
             return PromptResponse(
                 status=constants.OK,
-                response=validated_prompt,
+                response="response",
             )
         except ApplicationError:
             raise

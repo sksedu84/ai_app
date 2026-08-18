@@ -9,7 +9,7 @@ import hashlib
 from concurrent.futures import ThreadPoolExecutor
 from time import perf_counter
 from pathlib import Path
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, List, Any, Tuple
 
 import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -587,8 +587,34 @@ class VectorDatabaseManager(Embeddings):
                     "total": self._elapsed_ms(total_start),
                 },
             }
-    
-    def search(self, query: str, k: int = 5) -> List[Document]:
+
+    @staticmethod
+    def _dedupe_documents(documents: List[Document]) -> List[Document]:
+        """Drop duplicate chunks that may appear in fallback search paths."""
+        seen = set()
+        unique_documents: List[Document] = []
+        for doc in documents:
+            source = doc.metadata.get("source") if doc.metadata else ""
+            key = (source, doc.page_content)
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_documents.append(doc)
+        return unique_documents
+
+    @staticmethod
+    def _dedupe_scored_documents(documents: List[Tuple[Document, float]]) -> List[Tuple[Document, float]]:
+        """Drop duplicate chunks while keeping the highest score for each unique chunk."""
+        best_by_key: Dict[Tuple[str, str], Tuple[Document, float]] = {}
+        for doc, score in documents:
+            source = doc.metadata.get("source") if doc.metadata else ""
+            key = (source, doc.page_content)
+            current = best_by_key.get(key)
+            if current is None or score > current[1]:
+                best_by_key[key] = (doc, score)
+        return list(best_by_key.values())
+
+    def search(self, query: str, k: int = 10) -> List[Document]:
         """
         Search for documents similar to the query.
         
@@ -600,13 +626,103 @@ class VectorDatabaseManager(Embeddings):
             List of relevant documents
         """
         try:
-            results = self.db.similarity_search(query, k=k)
-            logger.debug(f"Found {len(results)} results for query: {query}")
+            safe_k = max(1, min(k, constants.VECTOR_SEARCH_MAX_K))
+            start = perf_counter()
+            strategy = "similarity"
+            results: List[Document] = []
+
+            if hasattr(self.db, "max_marginal_relevance_search"):
+                strategy = "mmr"
+                results = self.db.max_marginal_relevance_search(
+                    query,
+                    k=safe_k,
+                    fetch_k=max(constants.VECTOR_SEARCH_FETCH_K, safe_k),
+                    lambda_mult=constants.VECTOR_SEARCH_MMR_LAMBDA,
+                )
+
+            # If MMR is unavailable or returns no hits, use scored similarity and
+            # drop weak matches before falling back to plain similarity.
+            if not results and hasattr(self.db, "similarity_search_with_relevance_scores"):
+                strategy = "scored_similarity"
+                scored_results = self.db.similarity_search_with_relevance_scores(
+                    query,
+                    k=max(constants.VECTOR_SEARCH_FETCH_K, safe_k),
+                )
+                filtered_docs = [
+                    doc
+                    for doc, score in scored_results
+                    if score >= constants.VECTOR_SEARCH_MIN_RELEVANCE
+                ]
+                results = filtered_docs[:safe_k]
+
+            if not results:
+                strategy = "similarity"
+                results = self.db.similarity_search(query, k=safe_k)
+
+            results = self._dedupe_documents(results)
+            duration_ms = self._elapsed_ms(start)
+            logger.debug(
+                "Found %d results using strategy=%s (k=%d, duration_ms=%s)",
+                len(results),
+                strategy,
+                safe_k,
+                duration_ms,
+            )
             return results
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []
-    
+
+    def search_with_scores(self, query: str, k: int = 10) -> List[Tuple[Document, float]]:
+        """
+        Search for documents similar to the query and return relevance scores.
+
+        Args:
+            query: Search query
+            k: Number of results to return
+
+        Returns:
+            List of (document, score) tuples
+        """
+        try:
+            safe_k = max(1, min(k, constants.VECTOR_SEARCH_MAX_K))
+            start = perf_counter()
+            strategy = "scored_similarity"
+            scored_results: List[Tuple[Document, float]] = []
+
+            if hasattr(self.db, "similarity_search_with_relevance_scores"):
+                raw_results = self.db.similarity_search_with_relevance_scores(
+                    query,
+                    k=max(constants.VECTOR_SEARCH_FETCH_K, safe_k),
+                )
+                scored_results = [
+                    (doc, float(score))
+                    for doc, score in raw_results
+                    if float(score) >= constants.VECTOR_SEARCH_MIN_RELEVANCE
+                ]
+            else:
+                strategy = "similarity_fallback"
+                docs = self.db.similarity_search(query, k=safe_k)
+                # Score is unavailable on this path; use a neutral placeholder.
+                scored_results = [(doc, 0.0) for doc in docs]
+
+            scored_results = self._dedupe_scored_documents(scored_results)
+            scored_results.sort(key=lambda item: item[1], reverse=True)
+            scored_results = scored_results[:safe_k]
+
+            duration_ms = self._elapsed_ms(start)
+            logger.debug(
+                "Found %d scored results using strategy=%s (k=%d, duration_ms=%s)",
+                len(scored_results),
+                strategy,
+                safe_k,
+                duration_ms,
+            )
+            return scored_results
+        except Exception as e:
+            logger.error(f"Error during scored similarity search: {e}")
+            return []
+
     def delete_all_documents(self) -> bool:
         """
         Delete all documents from the vector database.
