@@ -46,9 +46,7 @@ class RAGServiceImpl:
                 status=constants.OK,
                 response="response",
             )
-        except ApplicationError:
-            raise
-        except HTTPException:
+        except ApplicationError | HTTPException:
             raise
         except Exception as exc:
             logger.exception("Unexpected error while processing RAG prompt: %s", exc)

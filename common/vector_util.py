@@ -22,7 +22,7 @@ from langchain_community.document_loaders import (
 from langchain_postgres import PGVector
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 
 from common import constants
 from config.logger import Logger
@@ -127,18 +127,11 @@ class VectorDatabaseManager(Embeddings):
     def _initialize_db(self) -> None:
         """Initialize the vector database connection with pgvector."""
         try:
-            connection_string = DatabaseConfig.psycopg_db_con_as_string()
-
-            # Test connection
-            self.engine = create_engine(connection_string)
-            with self.engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-
             # Initialize PGVector store
             self.db = PGVector(
                 embeddings=self,
                 collection_name=self.COLLECTION_NAME,
-                connection=connection_string,
+                connection=DatabaseConfig.psycopg_db_con_as_string(),
                 use_jsonb=True,
             )
 
@@ -257,29 +250,6 @@ class VectorDatabaseManager(Embeddings):
         
         return chunks
     
-    def _should_reindex_document(self, file_path: Path) -> bool:
-        """
-        Determine if a document needs to be re indexed.
-        
-        Args:
-            file_path: Path to the document
-            
-        Returns:
-            True if the document should be re indexed, False otherwise
-        """
-        try:
-            file_hash = self._get_file_hash(file_path)
-            stored_hash = self._get_stored_file_hash(str(file_path))
-            if stored_hash is not None:
-                return stored_hash != file_hash
-
-            # If this exact content already exists under another source path,
-            # treat it as unchanged to avoid duplicate embeddings on rename.
-            return self._get_existing_source_for_hash(file_hash) is None
-        except Exception as e:
-            logger.warning(f"Could not check if document needs reindexing: {e}")
-            return True
-
     def _get_stored_file_hash(self, source_file: str) -> Optional[str]:
         """Fetch the stored hash for a file from the vector metadata table."""
         sql = text(
@@ -303,7 +273,6 @@ class VectorDatabaseManager(Embeddings):
                 },
             ).scalar_one_or_none()
             return str(result) if result else None
-        return None
 
     def _get_existing_source_for_hash(self, file_hash: str) -> Optional[str]:
         """Find any existing source path that already has the same file hash."""
@@ -328,7 +297,6 @@ class VectorDatabaseManager(Embeddings):
                 },
             ).scalar_one_or_none()
             return str(result) if result else None
-        return None
 
     def _update_source_metadata(self, current_source: str, new_source: str, file_hash: str) -> int:
         """Update stored source metadata for a renamed file without re-embedding."""
@@ -359,7 +327,6 @@ class VectorDatabaseManager(Embeddings):
                 },
             )
             return result.rowcount or 0
-        return 0
 
     def _get_source_chunk_ids(self, source_file: str) -> List[str]:
         """Collect vector row IDs for a source file so they can be replaced."""
