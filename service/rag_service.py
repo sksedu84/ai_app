@@ -1,5 +1,4 @@
 import asyncio
-
 from fastapi import HTTPException
 
 from common import constants
@@ -8,7 +7,6 @@ from common.vector_util import get_vector_db_manager
 from config.exceptions import ApplicationError
 from config.logger import Logger
 from model.prompt_response import PromptResponse
-from common.ai_app_util import AiAppUtil
 
 logger = Logger.get_logger()
 
@@ -38,14 +36,8 @@ class RAGServiceImpl:
             vector_db = get_vector_db_manager()
 
             # Retrieve relevant documents from vector database
-            scored_results = vector_db.search_with_scores(validated_prompt, k=10)
-
-            relevant_docs = [doc for doc, _ in scored_results]
-
-            if not relevant_docs:
-                logger.warning(f"No relevant documents found for prompt: {validated_prompt}")
-
-
+            similarity_search_results = vector_db.similarity_search(validated_prompt, k=10)
+            logger.info("Similarity search results: %s", similarity_search_results)
             # Simulate RAG pipeline processing with context
             #await asyncio.sleep(3)
             #response = AiAppUtil.text_to_safe_html(response)

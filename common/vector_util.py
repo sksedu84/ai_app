@@ -673,7 +673,7 @@ class VectorDatabaseManager(Embeddings):
             logger.error(f"Error during similarity search: {e}")
             return []
 
-    def search_with_scores(self, query: str, k: int = 10) -> List[Tuple[Document, float]]:
+    def similarity_search(self, query: str, k: int = 10) -> List[Tuple[Document, float]]:
         """
         Search for documents similar to the query and return relevance scores.
 
