@@ -22,7 +22,7 @@ from langchain_community.document_loaders import (
 from langchain_postgres import PGVector
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 from common import constants
 from config.logger import Logger
@@ -127,6 +127,8 @@ class VectorDatabaseManager(Embeddings):
     def _initialize_db(self) -> None:
         """Initialize the vector database connection with pgvector."""
         try:
+            self.engine = create_engine(DatabaseConfig.psycopg_db_con_as_string())
+
             # Initialize PGVector store
             self.db = PGVector(
                 embeddings=self,
@@ -581,6 +583,36 @@ class VectorDatabaseManager(Embeddings):
                 best_by_key[key] = (doc, score)
         return list(best_by_key.values())
 
+    @staticmethod
+    def _normalize_text(value: str) -> str:
+        """Normalize text for a stable literal containment check."""
+        return " ".join(value.casefold().split())
+
+    def _boost_exact_matches(
+        self,
+        query: str,
+        documents: List[Tuple[Document, float]],
+    ) -> List[Tuple[Document, float]]:
+        """Raise exact literal matches to a perfect relevance score.
+
+        The vector store score is semantic similarity, so an exact phrase can still
+        produce a mid-range score. When the query text is literally present inside
+        a chunk, treat that as a perfect match and keep the semantic score only for
+        non-exact results.
+        """
+        normalized_query = self._normalize_text(query)
+        if not normalized_query:
+            return documents
+
+        boosted_results: List[Tuple[Document, float]] = []
+        for doc, score in documents:
+            content = self._normalize_text(doc.page_content or "")
+            if normalized_query in content:
+                boosted_results.append((doc, 1.0))
+            else:
+                boosted_results.append((doc, score))
+        return boosted_results
+
     def search(self, query: str, k: int = 10) -> List[Document]:
         """
         Search for documents similar to the query.
@@ -655,17 +687,20 @@ class VectorDatabaseManager(Embeddings):
             safe_k = max(1, min(k, constants.VECTOR_SEARCH_MAX_K))
             start = perf_counter()
             strategy = "scored_similarity"
-            scored_results: List[Tuple[Document, float]] = []
 
             if hasattr(self.db, "similarity_search_with_relevance_scores"):
                 raw_results = self.db.similarity_search_with_relevance_scores(
                     query,
                     k=max(constants.VECTOR_SEARCH_FETCH_K, safe_k),
                 )
+                scored_results = self._boost_exact_matches(
+                    query,
+                    [(doc, float(score)) for doc, score in raw_results],
+                )
                 scored_results = [
-                    (doc, float(score))
-                    for doc, score in raw_results
-                    if float(score) >= constants.VECTOR_SEARCH_MIN_RELEVANCE
+                    (doc, score)
+                    for doc, score in scored_results
+                    if score >= constants.VECTOR_SEARCH_MIN_RELEVANCE
                 ]
             else:
                 strategy = "similarity_fallback"
@@ -690,29 +725,77 @@ class VectorDatabaseManager(Embeddings):
             logger.error(f"Error during scored similarity search: {e}")
             return []
 
-    def delete_all_documents(self) -> bool:
+
+    def rerank_documents(
+        self, 
+        query: str, 
+        documents: List[Tuple[Document, float]],
+        top_k: int = 5
+    ) -> List[Tuple[Document, float]]:
         """
-        Delete all documents from the vector database.
+        Rerank documents using the configured Ollama reranker when available,
+        otherwise fall back to a local heuristic reranker.
         
+        Args:
+            query: The query string to rerank against
+            documents: List of (document, score) tuples to rerank
+            top_k: Number of top results to return after reranking
+            
         Returns:
-            True if successful, False otherwise
+            List of top_k reranked (document, score) tuples
         """
+        if not documents or top_k <= 0:
+            return []
+
+        safe_top_k = min(top_k, len(documents))
+        
         try:
-            # Preferred API for langchain_postgres.
-            if hasattr(self.db, "delete_collection"):
-                self.db.delete_collection()
-                if hasattr(self.db, "create_collection"):
-                    self.db.create_collection()
+            reranker_model = constants.RERANKER_MODEL
+            passages = [doc.page_content for doc, _ in documents]
+            
+            # Prepare the reranker payload
+            # BGE Reranker expects query and passages
+            payload = {
+                "model": reranker_model,
+                "query": query,
+                "passages": passages,
+            }
+            
+            rerank_start = perf_counter()
+            response = self._request_rerank(payload)
+            
+            result = response.json()
+            reranker_scores = self._extract_reranker_scores(result, len(documents))
+            
+            # If scores are returned, pair them with documents
+            if reranker_scores and len(reranker_scores) == len(documents):
+                reranked_docs = list(zip(
+                    [doc for doc, _ in documents],
+                    reranker_scores
+                ))
+                # Sort by reranker score in descending order
+                reranked_docs.sort(key=lambda x: x[1], reverse=True)
+                
+                duration_ms = self._elapsed_ms(rerank_start)
+                logger.info(
+                    "Reranked %d documents using model=%s (duration_ms=%s)",
+                    len(reranked_docs),
+                    reranker_model,
+                    duration_ms,
+                )
+                
+                # Return top_k results
+                return reranked_docs[:safe_top_k]
             else:
-                # Backward-compatible path for legacy stores.
-                all_results = self.db.get()
-                if all_results and all_results.get("ids"):
-                    self.db.delete(ids=all_results["ids"])
-            logger.info("All documents deleted from vector database")
-            return True
+                logger.warning(
+                    "Reranker returned unexpected scores format. Expected %d scores, got %d",
+                    len(documents),
+                    len(reranker_scores)
+                )
+                
         except Exception as e:
-            logger.error(f"Error deleting documents: {e}")
-            return False
+            logger.warning("Error during document reranking; using heuristic fallback instead: %s", e)
+            return self._heuristic_rerank_documents(query, documents, safe_top_k)
 
 
 # Global instance

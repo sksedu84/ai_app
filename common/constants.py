@@ -68,6 +68,7 @@ ROTATING_FILE_MAX_SIZE: Final[int] = N_1024 * BACKUP_COUNT
 # Local Models
 OLLAMA_URL: Final[str] = "http://localhost:11434/"
 EMBEDDING_MODEL: Final[str] = "nomic-embed-text:latest"
+RERANKER_MODEL: Final[str] = "*****/bge-reranker-v2-m3:260522"
 GUARD_MODEL: Final[str] = "llama-guard3:1b"
 RAG_MODEL: Final[str] = "llama3.2:3b"
 EMBEDDING_API_BATCH_SIZE: Final[int] = 128
