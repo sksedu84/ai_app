@@ -6,12 +6,12 @@ Uses PostgreSQL with pgvector for production-grade vector storage.
 """
 
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
+import re
+from collections import Counter, defaultdict
 from time import perf_counter
 from pathlib import Path
 from typing import Optional, Dict, List, Any, Tuple
 
-import requests
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
     DirectoryLoader,
@@ -21,17 +21,18 @@ from langchain_community.document_loaders import (
 )
 from langchain_postgres import PGVector
 from langchain_core.documents import Document
-from langchain_core.embeddings import Embeddings
 from sqlalchemy import create_engine, text
 
 from common import constants
+from common.embedding_util import EmbeddingUtil
+from common.rerank_util import RerankUtil
 from config.logger import Logger
 from common.database import DatabaseConfig
 
 logger = Logger.get_logger()
 
 
-class VectorDatabaseManager(Embeddings):
+class VectorDatabaseManager(EmbeddingUtil, RerankUtil):
     """Manages vector database operations for document embeddings using PostgreSQL with pgvector."""
 
     # Collection/table name
@@ -39,90 +40,9 @@ class VectorDatabaseManager(Embeddings):
 
     def __init__(self):
         """Initialize embedding and vector database management with pgvector."""
-        self.model = constants.EMBEDDING_MODEL
-        self.base_url = constants.OLLAMA_URL.rstrip("/")
-        self.batch_size = max(1, constants.EMBEDDING_API_BATCH_SIZE)
-        self.max_workers = max(1, constants.EMBEDDING_FALLBACK_WORKERS)
-        self.num_thread = constants.EMBEDDING_NUM_THREAD
-        self.num_gpu = constants.EMBEDDING_NUM_GPU
-        self.headers = {"Content-Type": constants.CONTENT_TYPE_JSON}
-        self.session = requests.Session()
+        super().__init__()
         self._initialize_db()
 
-    def _request_payload(self, *, key: str, value: Any) -> dict:
-        payload = {
-            "model": self.model,
-            key: value,
-        }
-        options = {}
-        if self.num_thread is not None:
-            options["num_thread"] = self.num_thread
-        if self.num_gpu is not None:
-            options["num_gpu"] = self.num_gpu
-        if options:
-            payload["options"] = options
-        return payload
-
-    def _embed_single_legacy(self, text: str) -> List[float]:
-        response = self.session.post(
-            f"{self.base_url}/api/embeddings",
-            headers=self.headers,
-            json=self._request_payload(key="prompt", value=text),
-            timeout=120,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        embedding = payload.get("embedding")
-        if not embedding:
-            raise ValueError("Missing 'embedding' in Ollama /api/embeddings response")
-        return embedding
-
-    def _embed_batch(self, texts: List[str]) -> List[List[float]]:
-        response = self.session.post(
-            f"{self.base_url}/api/embed",
-            headers=self.headers,
-            json=self._request_payload(key="input", value=texts),
-            timeout=180,
-        )
-        if response.status_code == 404:
-            # Older Ollama releases may not expose /api/embed.
-            raise RuntimeError("Ollama /api/embed not available")
-
-        response.raise_for_status()
-        payload = response.json()
-
-        embeddings = payload.get("embeddings")
-        if embeddings:
-            return embeddings
-
-        single_embedding = payload.get("embedding")
-        if single_embedding:
-            return [single_embedding]
-
-        raise ValueError("Missing embedding payload in Ollama /api/embed response")
-
-    def _embed_documents(self, texts: List[str]) -> List[List[float]]:
-        all_embeddings: List[List[float]] = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i:i + self.batch_size]
-            all_embeddings.extend(self._embed_batch(batch))
-        return all_embeddings
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        instruction_pairs = [f"passage: {text}" for text in texts]
-        try:
-            return self._embed_documents(instruction_pairs)
-        except Exception:
-            # Fallback path for older servers: parallelize single-text requests.
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                return list(executor.map(self._embed_single_legacy, instruction_pairs))
-
-    def embed_query(self, text: str) -> List[float]:
-        instruction_pair = f"query: {text}"
-        try:
-            return self._embed_batch([instruction_pair])[0]
-        except Exception:
-            return self._embed_single_legacy(instruction_pair)
 
     def _initialize_db(self) -> None:
         """Initialize the vector database connection with pgvector."""
@@ -251,7 +171,107 @@ class VectorDatabaseManager(Embeddings):
             chunk.metadata[constants.CHUNK_INDEX] = idx
         
         return chunks
-    
+
+    @staticmethod
+    def _extract_edge_line(lines: List[str], from_start: bool = True) -> str:
+        """Return the first/last non-empty line from a page's lines."""
+        iterable = lines if from_start else reversed(lines)
+        for line in iterable:
+            cleaned = line.strip()
+            if cleaned:
+                return cleaned
+        return ""
+
+    @staticmethod
+    def _line_signature(line: str) -> str:
+        """Normalize edge lines so variable page numbers still match."""
+        lowered = line.casefold().strip()
+        lowered = re.sub(r"\d+", "#", lowered)
+        return re.sub(r"\s+", " ", lowered)
+
+    @classmethod
+    def _strip_headers_and_footers(cls, documents: List[Document]) -> Tuple[List[Document], int]:
+        """Remove repeated page-level headers/footers before chunking and embedding."""
+        if not documents:
+            return documents, 0
+
+        docs_by_source: Dict[str, List[int]] = defaultdict(list)
+        for idx, doc in enumerate(documents):
+            source = str(Path(doc.metadata.get("source", ""))) if doc.metadata else ""
+            if source:
+                docs_by_source[source].append(idx)
+
+        if not docs_by_source:
+            return documents, 0
+
+        updated = list(documents)
+        cleaned_pages = 0
+
+        for _, indexes in docs_by_source.items():
+            if len(indexes) < 2:
+                continue
+
+            header_signatures: List[str] = []
+            footer_signatures: List[str] = []
+            edge_cache: Dict[int, Tuple[str, str]] = {}
+
+            for index in indexes:
+                lines = updated[index].page_content.splitlines()
+                top_line = cls._extract_edge_line(lines, from_start=True)
+                bottom_line = cls._extract_edge_line(lines, from_start=False)
+                edge_cache[index] = (top_line, bottom_line)
+                if top_line:
+                    header_signatures.append(cls._line_signature(top_line))
+                if bottom_line:
+                    footer_signatures.append(cls._line_signature(bottom_line))
+
+            threshold = max(2, int(len(indexes) * 0.6))
+            repeated_headers = {
+                signature
+                for signature, count in Counter(header_signatures).items()
+                if count >= threshold
+            }
+            repeated_footers = {
+                signature
+                for signature, count in Counter(footer_signatures).items()
+                if count >= threshold
+            }
+
+            if not repeated_headers and not repeated_footers:
+                continue
+
+            for index in indexes:
+                doc = updated[index]
+                lines = doc.page_content.splitlines()
+                if not lines:
+                    continue
+
+                top_line, bottom_line = edge_cache[index]
+                start = 0
+                end = len(lines)
+
+                if top_line and cls._line_signature(top_line) in repeated_headers:
+                    while start < end and not lines[start].strip():
+                        start += 1
+                    if start < end and lines[start].strip() == top_line:
+                        start += 1
+
+                if bottom_line and cls._line_signature(bottom_line) in repeated_footers:
+                    while end > start and not lines[end - 1].strip():
+                        end -= 1
+                    if end > start and lines[end - 1].strip() == bottom_line:
+                        end -= 1
+
+                if start == 0 and end == len(lines):
+                    continue
+
+                cleaned_content = "\n".join(lines[start:end]).strip()
+                if cleaned_content and cleaned_content != doc.page_content:
+                    doc.page_content = cleaned_content
+                    cleaned_pages += 1
+
+        return updated, cleaned_pages
+
     def _get_stored_file_hash(self, source_file: str) -> Optional[str]:
         """Fetch the stored hash for a file from the vector metadata table."""
         sql = text(
@@ -384,7 +404,13 @@ class VectorDatabaseManager(Embeddings):
                         "total": self._elapsed_ms(total_start),
                     },
                 }
-            
+
+            clean_start = perf_counter()
+            documents, cleaned_pages = self._strip_headers_and_footers(documents)
+            stage_timings_ms["clean_headers_footers"] = self._elapsed_ms(clean_start)
+            if cleaned_pages:
+                logger.info("Removed repeated headers/footers from %d pages", cleaned_pages)
+
             # Keep unchanged files out of chunking/embedding work.
             reindex_start = perf_counter()
             current_sources = {
@@ -724,79 +750,6 @@ class VectorDatabaseManager(Embeddings):
         except Exception as e:
             logger.error(f"Error during scored similarity search: {e}")
             return []
-
-
-    def rerank_documents(
-        self, 
-        query: str, 
-        documents: List[Tuple[Document, float]],
-        top_k: int = 5
-    ) -> List[Tuple[Document, float]]:
-        """
-        Rerank documents using the configured Ollama reranker when available,
-        otherwise fall back to a local heuristic reranker.
-        
-        Args:
-            query: The query string to rerank against
-            documents: List of (document, score) tuples to rerank
-            top_k: Number of top results to return after reranking
-            
-        Returns:
-            List of top_k reranked (document, score) tuples
-        """
-        if not documents or top_k <= 0:
-            return []
-
-        safe_top_k = min(top_k, len(documents))
-        
-        try:
-            reranker_model = constants.RERANKER_MODEL
-            passages = [doc.page_content for doc, _ in documents]
-            
-            # Prepare the reranker payload
-            # BGE Reranker expects query and passages
-            payload = {
-                "model": reranker_model,
-                "query": query,
-                "passages": passages,
-            }
-            
-            rerank_start = perf_counter()
-            response = self._request_rerank(payload)
-            
-            result = response.json()
-            reranker_scores = self._extract_reranker_scores(result, len(documents))
-            
-            # If scores are returned, pair them with documents
-            if reranker_scores and len(reranker_scores) == len(documents):
-                reranked_docs = list(zip(
-                    [doc for doc, _ in documents],
-                    reranker_scores
-                ))
-                # Sort by reranker score in descending order
-                reranked_docs.sort(key=lambda x: x[1], reverse=True)
-                
-                duration_ms = self._elapsed_ms(rerank_start)
-                logger.info(
-                    "Reranked %d documents using model=%s (duration_ms=%s)",
-                    len(reranked_docs),
-                    reranker_model,
-                    duration_ms,
-                )
-                
-                # Return top_k results
-                return reranked_docs[:safe_top_k]
-            else:
-                logger.warning(
-                    "Reranker returned unexpected scores format. Expected %d scores, got %d",
-                    len(documents),
-                    len(reranker_scores)
-                )
-                
-        except Exception as e:
-            logger.warning("Error during document reranking; using heuristic fallback instead: %s", e)
-            return self._heuristic_rerank_documents(query, documents, safe_top_k)
-
 
 # Global instance
 _vector_db_manager: Optional[VectorDatabaseManager] = None

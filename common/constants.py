@@ -68,13 +68,19 @@ ROTATING_FILE_MAX_SIZE: Final[int] = N_1024 * BACKUP_COUNT
 # Local Models
 OLLAMA_URL: Final[str] = "http://localhost:11434/"
 EMBEDDING_MODEL: Final[str] = "nomic-embed-text:latest"
-RERANKER_MODEL: Final[str] = "*****/bge-reranker-v2-m3:260522"
+LOCAL_RERANKER_MODEL: Final[str] = "BAAI/bge-reranker-v2-m3"
 GUARD_MODEL: Final[str] = "llama-guard3:1b"
 RAG_MODEL: Final[str] = "llama3.2:3b"
 EMBEDDING_API_BATCH_SIZE: Final[int] = 128
 EMBEDDING_FALLBACK_WORKERS: Final[int] = 6
 EMBEDDING_NUM_THREAD: Final[int | None] = None
 EMBEDDING_NUM_GPU: Final[int | None] = None
+
+# Local reranker tuning
+LOCAL_RERANKER_MAX_LENGTH: Final[int] = 512   # max tokens fed to the cross-encoder
+LOCAL_RERANKER_BATCH_SIZE: Final[int] = 16    # pairs per forward-pass
+# Rough char budget: 1 token ≈ 4 chars; query gets ~128 tokens, doc gets the rest
+LOCAL_RERANKER_DOC_MAX_CHARS: Final[int] = (LOCAL_RERANKER_MAX_LENGTH - 128) * 4
 
 # Cloud-based Models
 
@@ -89,6 +95,7 @@ VECTOR_SEARCH_FETCH_K: Final[int] = 40
 VECTOR_SEARCH_MAX_K: Final[int] = 20
 VECTOR_SEARCH_MMR_LAMBDA: Final[float] = 0.5
 VECTOR_SEARCH_MIN_RELEVANCE: Final[float] = 0.2
+RERANK_TOP_K: Final[int] = 5
 VECTOR_WEIGHT_EMBEDDING: Final[float] = 1.0
 VECTOR_WEIGHT_KEYWORD: Final[float] = 0.0
 VECTOR_WEIGHT_METADATA: Final[float] = 0.0

@@ -35,19 +35,25 @@ class RAGServiceImpl:
             # Get vector database manager
             vector_db = get_vector_db_manager()
 
-            # Retrieve relevant documents from vector database
-            similarity_search_results = vector_db.similarity_search(validated_prompt, k=20)
-            logger.info("Similarity search results: %s", similarity_search_results)
+            # Retrieve candidates with relevance scores.
+            similarity_search_results = vector_db.similarity_search(
+                validated_prompt,
+                k=constants.VECTOR_SEARCH_MAX_K,
+            )
+            logger.info("Retrieved %d candidate chunks", len(similarity_search_results))
 
             # Rerank the top results using the reranker model
-            """
             reranked_results = vector_db.rerank_documents(
                 query=validated_prompt,
                 documents=similarity_search_results,
-                top_k=5
+                top_k=constants.RERANK_TOP_K,
             )
-            logger.info("Reranked results (top 5): %s", len(reranked_results))
-            """
+            if not reranked_results:
+                reranked_results = similarity_search_results[:constants.RERANK_TOP_K]
+                logger.warning("Reranker returned no results; using similarity ranking fallback")
+            logger.info("Reranked results (top %d): %d", constants.RERANK_TOP_K, len(reranked_results))
+
+
             # Simulate RAG pipeline processing with context
             #await asyncio.sleep(3)
             #response = AiAppUtil.text_to_safe_html(response)
