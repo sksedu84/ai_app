@@ -1,7 +1,7 @@
-import asyncio
 from fastapi import HTTPException
 
 from common import constants
+from common.rag_util import RAGUtil
 from common.validate_util import validate_prompt
 from common.vector_util import get_vector_db_manager
 from config.exceptions import ApplicationError
@@ -35,32 +35,21 @@ class RAGServiceImpl:
             # Get vector database manager
             vector_db = get_vector_db_manager()
 
-            # Retrieve candidates with relevance scores.
+            # Retrieve candidates directly without reranking.
             similarity_search_results = vector_db.similarity_search(
                 validated_prompt,
-                k=constants.VECTOR_SEARCH_MAX_K,
+                k=constants.RAG_CONTEXT_TOP_K,
             )
             logger.info("Retrieved %d candidate chunks", len(similarity_search_results))
-
-            # Rerank the top results using the reranker model
-            reranked_results = vector_db.rerank_documents(
-                query=validated_prompt,
+            # Generate a RAG response from the local LLM using the retrieved context
+            response = await RAGUtil.generate(
+                question=validated_prompt,
                 documents=similarity_search_results,
-                top_k=constants.RERANK_TOP_K,
             )
-            if not reranked_results:
-                reranked_results = similarity_search_results[:constants.RERANK_TOP_K]
-                logger.warning("Reranker returned no results; using similarity ranking fallback")
-            logger.info("Reranked results (top %d): %d", constants.RERANK_TOP_K, len(reranked_results))
-
-
-            # Simulate RAG pipeline processing with context
-            #await asyncio.sleep(3)
-            #response = AiAppUtil.text_to_safe_html(response)
 
             return PromptResponse(
                 status=constants.OK,
-                response="response",
+                response=response,
             )
         except ApplicationError | HTTPException:
             raise

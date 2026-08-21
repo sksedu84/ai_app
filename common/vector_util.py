@@ -25,14 +25,13 @@ from sqlalchemy import create_engine, text
 
 from common import constants
 from common.embedding_util import EmbeddingUtil
-from common.rerank_util import RerankUtil
 from config.logger import Logger
 from common.database import DatabaseConfig
 
 logger = Logger.get_logger()
 
 
-class VectorDatabaseManager(EmbeddingUtil, RerankUtil):
+class VectorDatabaseManager(EmbeddingUtil):
     """Manages vector database operations for document embeddings using PostgreSQL with pgvector."""
 
     # Collection/table name

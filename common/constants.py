@@ -95,6 +95,7 @@ VECTOR_SEARCH_FETCH_K: Final[int] = 40
 VECTOR_SEARCH_MAX_K: Final[int] = 20
 VECTOR_SEARCH_MMR_LAMBDA: Final[float] = 0.5
 VECTOR_SEARCH_MIN_RELEVANCE: Final[float] = 0.2
+RAG_CONTEXT_TOP_K: Final[int] = 5
 RERANK_TOP_K: Final[int] = 5
 VECTOR_WEIGHT_EMBEDDING: Final[float] = 1.0
 VECTOR_WEIGHT_KEYWORD: Final[float] = 0.0

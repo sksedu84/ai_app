@@ -84,10 +84,6 @@ class ValidateUtil:
     @staticmethod
     def _validate_with_llama_guard(normalized_prompt: str) -> None:
         """Run prompt safety moderation using the configured Llama Guard model."""
-        cached_token = ValidateUtil._get_unexpected_prompt(normalized_prompt)
-        if cached_token is not None:
-            logger.info("Prompt invalid from database: %s", cached_token)
-            raise ValidationError("Prompt safety validation returned an unexpected result.")
 
         guard_prompt = (
             "Classify the user input for safety. "
@@ -138,6 +134,7 @@ class ValidateUtil:
             raise ValidationError("Prompt must not start or end with forbidden wrappers.")
 
         normalized_prompt = html.escape(stripped_prompt.replace("\n", " "))
+
         if len(normalized_prompt) > constants.MAX_PROMPT_LENGTH:
             raise ValidationError(f"Prompt exceeds the maximum length of {constants.MAX_PROMPT_LENGTH} characters.")
 
