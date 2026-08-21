@@ -29,7 +29,7 @@ class RAGPromptEndpoint:
 
     @staticmethod
     async def rag_prompt(
-        prompt: str = Query(default=None, min_length=1, max_length=10_000),
+        prompt: str = Query(..., min_length=1, max_length=10_000),
         service: Annotated[RAGServiceImpl, Depends(get_rag_service)] = None
     ) -> PromptResponse:
         """
