@@ -30,7 +30,13 @@ class RAGServiceImpl:
             HTTPException: If processing fails
         """
         try:
-            validated_prompt = validate_prompt(prompt)
+            # Validate prompt for safety and correctness
+            safety_status, validated_prompt = validate_prompt(prompt)
+            if safety_status != "safe" or validated_prompt is None:
+                return PromptResponse(
+                    status=constants.ERROR,
+                    response="Prompt validation failed. Please ensure your prompt is safe and valid.",
+                )
 
             # Get vector database manager
             vector_db = get_vector_db_manager()
@@ -41,6 +47,7 @@ class RAGServiceImpl:
                 k=constants.RAG_CONTEXT_TOP_K,
             )
             logger.info("Retrieved %d candidate chunks", len(similarity_search_results))
+
             # Generate a RAG response from the local LLM using the retrieved context
             response = await RAGUtil.generate(
                 question=validated_prompt,

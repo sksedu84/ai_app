@@ -11,7 +11,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from common import constants
 from common.database import DatabaseConfig
 from config.logger import Logger
-from config.exceptions import ValidationError
 
 logger = Logger.get_logger()
 
@@ -82,8 +81,8 @@ class ValidateUtil:
             logger.warning("Unable to write prompt guard cache entry: %s", exc)
 
     @staticmethod
-    def _validate_with_llama_guard(normalized_prompt: str) -> None:
-        """Run prompt safety moderation using the configured Llama Guard model."""
+    def _validate_with_llama_guard(normalized_prompt: str) -> str:
+        """Return prompt safety classification from Llama Guard as 'safe' or 'unsafe'."""
 
         guard_prompt = (
             "Classify the user input for safety. "
@@ -104,46 +103,47 @@ class ValidateUtil:
             response.raise_for_status()
             payload: dict[str, Any] = response.json()
         except requests.RequestException as exc:
-            raise ValidationError("Unable to validate prompt safety with Llama Guard.") from exc
+            logger.warning("Unable to validate prompt safety with Llama Guard: %s", exc)
+            return "unsafe"
 
         model_response = str(payload.get("response", "")).strip().lower()
         first_token = model_response.split(maxsplit=1)[0] if model_response else ""
         logger.info("Llama Guard response: %s", first_token)
-        if first_token == "unsafe":
-            ValidateUtil._cache_unexpected_guard_token(normalized_prompt, first_token)
-            raise ValidationError("Prompt blocked by Llama Guard safety policy.")
-
         if first_token != "safe":
             ValidateUtil._cache_unexpected_guard_token(normalized_prompt, first_token)
-            raise ValidationError("Prompt safety validation returned an unexpected result.")
+            return "unsafe"
+        else:
+            return "safe"
 
     @staticmethod
-    def validate_prompt(prompt: str) -> str:
+    def validate_prompt(prompt: str) -> tuple[str, Optional[str]]:
         # Validate RAG prompt text before processing.
         if prompt is None:
-            raise ValidationError("Prompt is required.")
+            return "unsafe", None
 
         if not isinstance(prompt, str):
-            raise ValidationError("Prompt must be a string.")
+            return "unsafe", None
 
         stripped_prompt = prompt.strip()
         if not stripped_prompt:
-            raise ValidationError("Prompt must not be empty.")
+            return "unsafe", None
 
         if stripped_prompt.startswith(constants.FORBIDDEN_WRAPPERS) or stripped_prompt.endswith(constants.FORBIDDEN_WRAPPERS):
-            raise ValidationError("Prompt must not start or end with forbidden wrappers.")
+            return "unsafe", None
 
         normalized_prompt = html.escape(stripped_prompt.replace("\n", " "))
 
         if len(normalized_prompt) > constants.MAX_PROMPT_LENGTH:
-            raise ValidationError(f"Prompt exceeds the maximum length of {constants.MAX_PROMPT_LENGTH} characters.")
+            return "unsafe", None
 
-        ValidateUtil._validate_with_llama_guard(normalized_prompt)
+        safety_status = ValidateUtil._validate_with_llama_guard(normalized_prompt)
+        if safety_status != "safe":
+            return "unsafe", None
 
-        return normalized_prompt
+        return "safe", normalized_prompt
 
 
-def validate_prompt(prompt: str) -> str:
+def validate_prompt(prompt: str) -> tuple[str, Optional[str]]:
     """Backward-compatible helper for direct function imports."""
     return ValidateUtil.validate_prompt(prompt)
 
