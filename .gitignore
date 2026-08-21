@@ -64,8 +64,8 @@ cython_debug/
 /.idea/*
 /ai_app.iml
 /log/*
-/tests/log/*
 .DS_Store
 /data/documents
 /data/archive
-
+/tests/data/documents
+/tests/data/sql

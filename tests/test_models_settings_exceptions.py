@@ -1,9 +1,12 @@
+import logging
 import pytest
 from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
+from pathlib import Path
 
 from common import constants
-from config.exceptions import ApplicationError, ValidationError, exception_handlers
+from config.exceptions import ValidationError, exception_handlers
+from config.logger import Logger
 from config.settings import Settings, _parse_cors_list_value
 from model.admin_response import AdminResponse
 from model.error_response import ErrorResponse
@@ -39,6 +42,17 @@ def test_parse_cors_values(value, expected):
 def test_settings_parse_cors_from_init_values():
     settings = Settings(CORS_ORIGINS="https://example.test, https://admin.test")
     assert settings.cors_origins == ["https://example.test", "https://admin.test"]
+
+
+def test_logger_writes_to_project_log_directory_when_tests_are_current_directory(monkeypatch):
+    Logger._logger_instance = None
+    logging.getLogger(constants.APP_NAME).handlers.clear()
+    monkeypatch.chdir(Path(__file__).parent)
+
+    logger = Logger.get_logger()
+
+    file_handler = next(handler for handler in logger.handlers if isinstance(handler, logging.FileHandler))
+    assert Path(file_handler.baseFilename).parent == Path(__file__).resolve().parents[1] / constants.LOG_FILE_DIR
 
 
 @pytest.mark.asyncio

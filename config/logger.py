@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -41,7 +40,7 @@ class Logger:
             Logger._logger_instance = logger
             return logger
 
-        log_dir = Path(os.getcwd()) / constants.LOG_FILE_DIR
+        log_dir = Path(__file__).resolve().parents[1] / constants.LOG_FILE_DIR
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / constants.LOG_FILE_NAME
 
